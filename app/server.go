@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 )
 
 // Ensures gofmt doesn't remove the "net" and "os" imports in stage 1 (feel free to remove this!)
@@ -44,14 +45,30 @@ func handleConnection(conn net.Conn) {
 		}
 
 		// Only process if we received data
-		if n > 0 {
+		command := string(buffer[:n])
+
+		if command == "*1\r\n$4\r\nPING\r\n" {
 			response := "+PONG\r\n"
 			_, err = conn.Write([]byte(response))
 			if err != nil {
-				fmt.Println("Failed to write to connection")
+				fmt.Println("Failed to write PONG response")
 				return
 			}
 			fmt.Println("PONG")
+		} else if strings.HasPrefix(command, "*2\r\n$4\r\nECHO\r\n") {
+			// Parse ECHO command: *2\r\n$4\r\nECHO\r\n$5\r\napple\r\n
+			parts := strings.Split(command, "\r\n")
+			if len(parts) >= 6 {
+				// parts[4] contains the echoed message
+				message := parts[4]
+				response := "+" + message + "\r\n"
+				_, err = conn.Write([]byte(response))
+				if err != nil {
+					fmt.Println("Failed to write ECHO response")
+					return
+				}
+				fmt.Println("ECHO:", message)
+			}
 		}
 	}
 }

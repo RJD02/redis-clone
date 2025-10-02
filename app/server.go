@@ -41,7 +41,7 @@ func handleConnection(conn net.Conn) {
 		fmt.Println("Failed to read from connection")
 		return
 	}
-	
+
 	response := "+PONG\r\n"
 	_, err = conn.Write([]byte(response))
 	if err != nil {
@@ -49,4 +49,5 @@ func handleConnection(conn net.Conn) {
 		return
 	}
 	fmt.Println("PONG")
+
 }

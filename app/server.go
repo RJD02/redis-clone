@@ -35,19 +35,23 @@ func main() {
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 
-	buffer := make([]byte, 1024)
-	_, err := conn.Read(buffer)
-	if err != nil {
-		fmt.Println("Failed to read from connection")
-		return
-	}
+	for {
+		buffer := make([]byte, 1024)
+		n, err := conn.Read(buffer)
+		if err != nil {
+			fmt.Println("Connection closed or error:", err)
+			return
+		}
 
-	response := "+PONG\r\n"
-	_, err = conn.Write([]byte(response))
-	if err != nil {
-		fmt.Println("Failed to write to connection")
-		return
+		// Only process if we received data
+		if n > 0 {
+			response := "+PONG\r\n"
+			_, err = conn.Write([]byte(response))
+			if err != nil {
+				fmt.Println("Failed to write to connection")
+				return
+			}
+			fmt.Println("PONG")
+		}
 	}
-	fmt.Println("PONG")
-
 }

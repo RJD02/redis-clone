@@ -4,16 +4,8 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strings"
 
 	"github.com/codecrafters-io/redis-starter-go/app/commands"
-)
-
-var (
-	ECHO_COMMAND_PREFIX = "*2\r\n$4\r\nECHO\r\n"
-	PING_COMMAND        = "*1\r\n$4\r\nPING\r\n"
-	SET_COMMAND_PREFIX  = "*3\r\n$3\r\nSET\r\n"
-	GET_COMMAND_PREFIX  = "*2\r\n$3\r\nGET\r\n"
 )
 
 // Ensures gofmt doesn't remove the "net" and "os" imports in stage 1 (feel free to remove this!)
@@ -59,14 +51,7 @@ func handleConnection(conn net.Conn) {
 		// Only process if we received data
 		command := string(buffer[:n])
 
-		if command == PING_COMMAND {
-			go commands.HandlePing(conn)
-		} else if strings.HasPrefix(command, ECHO_COMMAND_PREFIX) {
-			go commands.HandleEcho(conn, command)
-		} else if strings.HasPrefix(command, SET_COMMAND_PREFIX) {
-			go commands.HandleSet(conn, command)
-		} else if strings.HasPrefix(command, GET_COMMAND_PREFIX) {
-			go commands.HandleGet(conn, command)
-		}
+		// Use the unified command handler
+		go commands.HandleCommand(conn, command)
 	}
 }

@@ -5,11 +5,23 @@ import (
 	"net"
 	"os"
 	"strings"
+
+	"github.com/codecrafters-io/redis-starter-go/app/commands"
+)
+
+var (
+	ECHO_COMMAND_PREFIX = "*2\r\n$4\r\nECHO\r\n"
+	PING_COMMAND        = "*1\r\n$4\r\nPING\r\n"
+	SET_COMMAND_PREFIX  = "*3\r\n$3\r\nSET\r\n"
+	GET_COMMAND_PREFIX  = "*2\r\n$3\r\nGET\r\n"
 )
 
 // Ensures gofmt doesn't remove the "net" and "os" imports in stage 1 (feel free to remove this!)
 var _ = net.Listen
 var _ = os.Exit
+
+// toBulkString formats a string as a Redis RESP bulk string
+// Format: $<length>\r\n<data>\r\n
 
 func main() {
 	// You can use print statements as follows for debugging, they'll be visible when running tests.
@@ -47,28 +59,14 @@ func handleConnection(conn net.Conn) {
 		// Only process if we received data
 		command := string(buffer[:n])
 
-		if command == "*1\r\n$4\r\nPING\r\n" {
-			response := "+PONG\r\n"
-			_, err = conn.Write([]byte(response))
-			if err != nil {
-				fmt.Println("Failed to write PONG response")
-				return
-			}
-			fmt.Println("PONG")
-		} else if strings.HasPrefix(command, "*2\r\n$4\r\nECHO\r\n") {
-			// Parse ECHO command: *2\r\n$4\r\nECHO\r\n$5\r\napple\r\n
-			parts := strings.Split(command, "\r\n")
-			if len(parts) >= 6 {
-				// parts[4] contains the echoed message
-				message := parts[4]
-				response := "+" + message + "\r\n"
-				_, err = conn.Write([]byte(response))
-				if err != nil {
-					fmt.Println("Failed to write ECHO response")
-					return
-				}
-				fmt.Println("ECHO:", message)
-			}
+		if command == PING_COMMAND {
+			go commands.HandlePing(conn)
+		} else if strings.HasPrefix(command, ECHO_COMMAND_PREFIX) {
+			go commands.HandleEcho(conn, command)
+		} else if strings.HasPrefix(command, SET_COMMAND_PREFIX) {
+			go commands.HandleSet(conn, command)
+		} else if strings.HasPrefix(command, GET_COMMAND_PREFIX) {
+			go commands.HandleGet(conn, command)
 		}
 	}
 }

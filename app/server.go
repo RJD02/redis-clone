@@ -33,7 +33,20 @@ func main() {
 }
 
 func handleConnection(conn net.Conn) {
-	fmt.Println("PONG")
 	defer conn.Close()
-	// For now, just close the connection immediately.
+
+	buffer := make([]byte, 1024)
+	_, err := conn.Read(buffer)
+	if err != nil {
+		fmt.Println("Failed to read from connection")
+		return
+	}
+	
+	response := "+PONG\r\n"
+	_, err = conn.Write([]byte(response))
+	if err != nil {
+		fmt.Println("Failed to write to connection")
+		return
+	}
+	fmt.Println("PONG")
 }

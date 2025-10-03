@@ -141,6 +141,20 @@ func (ed *ExpiringDict) Delete(key string) {
 
 var Dictionary = NewExpiringDict()
 
+// Global server configuration
+var serverRole = "master" // Default to master
+
+// SetServerRole sets the server's role (master or slave)
+func SetServerRole(role string) {
+	serverRole = role
+	fmt.Printf("Server role set to: %s\n", role)
+}
+
+// GetServerRole returns the current server role
+func GetServerRole() string {
+	return serverRole
+}
+
 func HandlePing(conn net.Conn, cmd *Command) {
 	response := "+PONG\r\n"
 	_, err := conn.Write([]byte(response))
@@ -265,15 +279,16 @@ func HandleInfo(conn net.Conn, cmd *Command) {
 	}
 
 	var infoContent string
+	role := GetServerRole()
 
 	switch section {
 	case "replication":
 		// Only return replication information
-		infoContent = "role:master"
+		infoContent = "role:" + role
 	case "all":
 		// For now, just return replication info for "all" as well
 		// In a full implementation, this would include all sections
-		infoContent = "# Replication\nrole:master"
+		infoContent = "# Replication\nrole:" + role
 	default:
 		// Unknown section, return empty (Redis behavior)
 		infoContent = ""
@@ -287,5 +302,5 @@ func HandleInfo(conn net.Conn, cmd *Command) {
 		return
 	}
 
-	fmt.Printf("INFO: section=%s\n", section)
+	fmt.Printf("INFO: section=%s, role=%s\n", section, role)
 }

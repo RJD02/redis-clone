@@ -62,12 +62,20 @@ func (r *ReplicaClient) StartHandshake() error {
 	// Wait for OK response
 	time.Sleep(50 * time.Millisecond)
 
-	// Step 3: Send REPLCONF capa psync2
+	// Step 3: Send REPLCONF capa eof capa psync2
 	if err := r.sendReplconfCapa(); err != nil {
 		return fmt.Errorf("failed to send REPLCONF capa: %v", err)
 	}
 
 	// Wait for OK response
+	time.Sleep(50 * time.Millisecond)
+
+	// Step 4: Send PSYNC ? -1
+	if err := r.sendPsync(); err != nil {
+		return fmt.Errorf("failed to send PSYNC: %v", err)
+	}
+
+	// Wait for FULLRESYNC response
 	time.Sleep(50 * time.Millisecond)
 
 	fmt.Println("Replication handshake completed")
@@ -127,14 +135,16 @@ func (r *ReplicaClient) sendReplconfListeningPort() error {
 	return nil
 }
 
-// sendReplconfCapa sends REPLCONF capa psync2 command to the master
+// sendReplconfCapa sends REPLCONF capa eof capa psync2 command to the master
 func (r *ReplicaClient) sendReplconfCapa() error {
-	// Create REPLCONF capa psync2 command as RESP array
-	// *3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n
+	// Create REPLCONF capa eof capa psync2 command as RESP array
+	// *5\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$3\r\neof\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n
 	replconfCommand := parser.RESPValue{
 		Type: "array",
 		Array: []parser.RESPValue{
 			{Type: "bulk", Str: "REPLCONF"},
+			{Type: "bulk", Str: "capa"},
+			{Type: "bulk", Str: "eof"},
 			{Type: "bulk", Str: "capa"},
 			{Type: "bulk", Str: "psync2"},
 		},
@@ -149,7 +159,33 @@ func (r *ReplicaClient) sendReplconfCapa() error {
 		return fmt.Errorf("failed to write REPLCONF capa command: %v", err)
 	}
 
-	fmt.Printf("Sent REPLCONF capa psync2 to master: %s", respData)
+	fmt.Printf("Sent REPLCONF capa eof capa psync2 to master: %s", respData)
+	return nil
+}
+
+// sendPsync sends PSYNC ? -1 command to the master
+func (r *ReplicaClient) sendPsync() error {
+	// Create PSYNC ? -1 command as RESP array
+	// *3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n
+	psyncCommand := parser.RESPValue{
+		Type: "array",
+		Array: []parser.RESPValue{
+			{Type: "bulk", Str: "PSYNC"},
+			{Type: "bulk", Str: "?"},
+			{Type: "bulk", Str: "-1"},
+		},
+	}
+
+	// Encode to RESP format
+	respData := parser.EncodeRESP(psyncCommand)
+
+	// Send to master
+	_, err := r.conn.Write([]byte(respData))
+	if err != nil {
+		return fmt.Errorf("failed to write PSYNC command: %v", err)
+	}
+
+	fmt.Printf("Sent PSYNC ? -1 to master: %s", respData)
 	return nil
 }
 

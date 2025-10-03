@@ -1,0 +1,16 @@
+# Binaries
+redis-server
+test-binary
+*.exe
+*.out
+
+# Go build cache
+*.sum
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db

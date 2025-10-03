@@ -3,22 +3,25 @@ package replication
 import (
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/parser"
 )
 
 // ReplicaClient handles the connection from replica to master
 type ReplicaClient struct {
-	masterHost string
-	masterPort string
-	conn       net.Conn
+	masterHost  string
+	masterPort  string
+	replicaPort string
+	conn        net.Conn
 }
 
 // NewReplicaClient creates a new replica client
-func NewReplicaClient(masterHost, masterPort string) *ReplicaClient {
+func NewReplicaClient(masterHost, masterPort, replicaPort string) *ReplicaClient {
 	return &ReplicaClient{
-		masterHost: masterHost,
-		masterPort: masterPort,
+		masterHost:  masterHost,
+		masterPort:  masterPort,
+		replicaPort: replicaPort,
 	}
 }
 
@@ -48,7 +51,26 @@ func (r *ReplicaClient) StartHandshake() error {
 		return fmt.Errorf("failed to send PING: %v", err)
 	}
 
-	fmt.Println("Replication handshake initiated with PING")
+	// Wait for PONG response
+	time.Sleep(50 * time.Millisecond)
+
+	// Step 2: Send REPLCONF listening-port
+	if err := r.sendReplconfListeningPort(); err != nil {
+		return fmt.Errorf("failed to send REPLCONF listening-port: %v", err)
+	}
+
+	// Wait for OK response
+	time.Sleep(50 * time.Millisecond)
+
+	// Step 3: Send REPLCONF capa psync2
+	if err := r.sendReplconfCapa(); err != nil {
+		return fmt.Errorf("failed to send REPLCONF capa: %v", err)
+	}
+
+	// Wait for OK response
+	time.Sleep(50 * time.Millisecond)
+
+	fmt.Println("Replication handshake completed")
 	return nil
 }
 
@@ -73,9 +95,61 @@ func (r *ReplicaClient) sendPing() error {
 
 	fmt.Printf("Sent PING to master: %s", respData)
 
-	// Read response (optional for this stage, but good practice)
+	// Start background response reader if not already started
 	go r.readResponse()
 
+	return nil
+}
+
+// sendReplconfListeningPort sends REPLCONF listening-port command to the master
+func (r *ReplicaClient) sendReplconfListeningPort() error {
+	// Create REPLCONF listening-port command as RESP array
+	// *3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$<port_len>\r\n<port>\r\n
+	replconfCommand := parser.RESPValue{
+		Type: "array",
+		Array: []parser.RESPValue{
+			{Type: "bulk", Str: "REPLCONF"},
+			{Type: "bulk", Str: "listening-port"},
+			{Type: "bulk", Str: r.replicaPort},
+		},
+	}
+
+	// Encode to RESP format
+	respData := parser.EncodeRESP(replconfCommand)
+
+	// Send to master
+	_, err := r.conn.Write([]byte(respData))
+	if err != nil {
+		return fmt.Errorf("failed to write REPLCONF listening-port command: %v", err)
+	}
+
+	fmt.Printf("Sent REPLCONF listening-port to master: %s", respData)
+	return nil
+}
+
+// sendReplconfCapa sends REPLCONF capa psync2 command to the master
+func (r *ReplicaClient) sendReplconfCapa() error {
+	// Create REPLCONF capa psync2 command as RESP array
+	// *3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n
+	replconfCommand := parser.RESPValue{
+		Type: "array",
+		Array: []parser.RESPValue{
+			{Type: "bulk", Str: "REPLCONF"},
+			{Type: "bulk", Str: "capa"},
+			{Type: "bulk", Str: "psync2"},
+		},
+	}
+
+	// Encode to RESP format
+	respData := parser.EncodeRESP(replconfCommand)
+
+	// Send to master
+	_, err := r.conn.Write([]byte(respData))
+	if err != nil {
+		return fmt.Errorf("failed to write REPLCONF capa command: %v", err)
+	}
+
+	fmt.Printf("Sent REPLCONF capa psync2 to master: %s", respData)
 	return nil
 }
 

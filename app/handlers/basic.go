@@ -35,3 +35,16 @@ func HandleEcho(conn net.Conn, cmd *Command) {
 	}
 	fmt.Println("ECHO:", message)
 }
+
+// HandleReplconf handles the REPLCONF command
+func HandleReplconf(conn net.Conn, cmd *Command) {
+	// For now, REPLCONF always responds with +OK regardless of the arguments
+	// In the future, we might want to handle specific REPLCONF subcommands
+	response := "+OK\r\n"
+	_, err := conn.Write([]byte(response))
+	if err != nil {
+		fmt.Println("Failed to write REPLCONF response")
+		return
+	}
+	fmt.Printf("REPLCONF: %v\n", cmd.Args)
+}

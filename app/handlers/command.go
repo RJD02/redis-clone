@@ -63,6 +63,8 @@ func HandleCommand(conn net.Conn, respData string) {
 		HandleGet(conn, cmd)
 	case "INFO":
 		HandleInfo(conn, cmd)
+	case "REPLCONF":
+		HandleReplconf(conn, cmd)
 	default:
 		response := "-ERR unknown command '" + cmd.Name + "'\r\n"
 		conn.Write([]byte(response))

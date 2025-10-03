@@ -61,7 +61,7 @@ func Initialize(cliConfig *config.CLIConfig) {
 		fmt.Printf("Configured as replica of %s:%s\n", cliConfig.MasterHost, cliConfig.MasterPort)
 
 		// Start replication handshake in background
-		go startReplicationHandshake(cliConfig.MasterHost, cliConfig.MasterPort)
+		go startReplicationHandshake(cliConfig.MasterHost, cliConfig.MasterPort, cliConfig.Port)
 	} else {
 		config.SetServerRole("master")
 		fmt.Println("Configured as master")
@@ -69,11 +69,11 @@ func Initialize(cliConfig *config.CLIConfig) {
 }
 
 // startReplicationHandshake initiates the handshake with master server
-func startReplicationHandshake(masterHost, masterPort string) {
+func startReplicationHandshake(masterHost, masterPort, replicaPort string) {
 	// Give the server a moment to start up
 	time.Sleep(100 * time.Millisecond)
 
-	client := replication.NewReplicaClient(masterHost, masterPort)
+	client := replication.NewReplicaClient(masterHost, masterPort, replicaPort)
 
 	// Connect to master
 	if err := client.Connect(); err != nil {

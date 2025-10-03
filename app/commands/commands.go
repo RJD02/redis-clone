@@ -64,6 +64,8 @@ func HandleCommand(conn net.Conn, respData string) {
 		HandleSet(conn, cmd)
 	case "GET":
 		HandleGet(conn, cmd)
+	case "INFO":
+		HandleInfo(conn, cmd)
 	default:
 		response := "-ERR unknown command '" + cmd.Name + "'\r\n"
 		conn.Write([]byte(response))
@@ -253,4 +255,37 @@ func HandleGet(conn net.Conn, cmd *Command) {
 		fmt.Println("Failed to write GET response")
 		return
 	}
+}
+
+func HandleInfo(conn net.Conn, cmd *Command) {
+	// Default to all sections if no argument provided
+	section := "all"
+	if len(cmd.Args) > 0 {
+		section = strings.ToLower(cmd.Args[0])
+	}
+
+	var infoContent string
+
+	switch section {
+	case "replication":
+		// Only return replication information
+		infoContent = "role:master"
+	case "all":
+		// For now, just return replication info for "all" as well
+		// In a full implementation, this would include all sections
+		infoContent = "# Replication\nrole:master"
+	default:
+		// Unknown section, return empty (Redis behavior)
+		infoContent = ""
+	}
+
+	// Encode as bulk string
+	response := parser.ToBulkString(infoContent)
+	_, err := conn.Write([]byte(response))
+	if err != nil {
+		fmt.Println("Failed to write INFO response")
+		return
+	}
+
+	fmt.Printf("INFO: section=%s\n", section)
 }

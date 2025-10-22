@@ -64,7 +64,7 @@ func (rm *ReplicaManager) PropagateCommand(commandName string, args []string) {
 
 	// Create RESP array for the command
 	respArray := parser.RESPValue{
-		Type: "array",
+		Type:  "array",
 		Array: make([]parser.RESPValue, len(args)+1),
 	}
 

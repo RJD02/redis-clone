@@ -115,14 +115,14 @@ func (s *RedisServer) GetRepository() repository.KeyValueRepository {
 }
 
 // Initialize sets up the server configuration based on CLI args
-func Initialize(cliConfig *config.CLIConfig) {
+func Initialize(cliConfig *config.CLIConfig, repo repository.KeyValueRepository) {
 	if cliConfig.IsReplica {
 		config.SetServerRole("slave")
 		config.SetReplicaConfig(cliConfig.MasterHost, cliConfig.MasterPort)
 		fmt.Printf("Configured as replica of %s:%s\n", cliConfig.MasterHost, cliConfig.MasterPort)
 
-		// Start replication handshake in background
-		go startReplicationHandshake(cliConfig.MasterHost, cliConfig.MasterPort, cliConfig.Port)
+		// Start replication handshake in background with repository dependency
+		go startReplicationHandshake(cliConfig.MasterHost, cliConfig.MasterPort, cliConfig.Port, repo)
 	} else {
 		config.SetServerRole("master")
 		fmt.Println("Configured as master")
@@ -130,11 +130,17 @@ func Initialize(cliConfig *config.CLIConfig) {
 }
 
 // startReplicationHandshake initiates the handshake with master server
-func startReplicationHandshake(masterHost, masterPort, replicaPort string) {
+func startReplicationHandshake(masterHost, masterPort, replicaPort string, repo repository.KeyValueRepository) {
 	// Give the server a moment to start up
 	time.Sleep(100 * time.Millisecond)
 
-	client := replication.NewReplicaClient(masterHost, masterPort, replicaPort)
+	// Create a command processor for the replica
+	replicaHandler := handlers.NewReplicaCommandHandler(repo)
+	commandProcessor := func(respData string) error {
+		return replicaHandler.ProcessCommand(respData)
+	}
+
+	client := replication.NewReplicaClient(masterHost, masterPort, replicaPort, commandProcessor)
 
 	// Connect to master
 	if err := client.Connect(); err != nil {
@@ -159,8 +165,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Create repository with existing global dictionary for backward compatibility
+	repo := repository.NewMemoryRepositoryWithStorage(storage.Dictionary)
+
 	// Initialize server configuration
-	Initialize(cliConfig)
+	Initialize(cliConfig, repo)
 
 	// Create and start the Redis server
 	redisServer, err := NewRedisServer(cliConfig.Port)

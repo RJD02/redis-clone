@@ -22,8 +22,8 @@ type ReplicaClient struct {
 	conn             net.Conn
 	commandProcessor CommandProcessor
 	connectionSetter ConnectionSetter // New field to set connection on command processor
-	buffer           []byte            // Buffer for accumulating partial data
-	rdbReceived      bool              // Flag to track if RDB file has been fully received
+	buffer           []byte           // Buffer for accumulating partial data
+	rdbReceived      bool             // Flag to track if RDB file has been fully received
 }
 
 // NewReplicaClient creates a new replica client
@@ -50,12 +50,12 @@ func (r *ReplicaClient) Connect() error {
 	}
 
 	fmt.Printf("Connected to master at %s\n", address)
-	
+
 	// Set the connection on the command processor so it can send ACK responses
 	if r.connectionSetter != nil {
 		r.connectionSetter(r.conn)
 	}
-	
+
 	return nil
 }
 
@@ -221,7 +221,7 @@ func (r *ReplicaClient) readResponse() {
 		if n > 0 {
 			// Accumulate data in buffer
 			r.buffer = append(r.buffer, readBuffer[:n]...)
-			
+
 			// Process complete commands from the buffer
 			r.processBufferedCommands()
 		}
@@ -231,21 +231,21 @@ func (r *ReplicaClient) readResponse() {
 // processBufferedCommands processes complete RESP commands from the buffer
 func (r *ReplicaClient) processBufferedCommands() {
 	data := string(r.buffer)
-	
+
 	// First, process any handshake responses (+PONG, +OK, +FULLRESYNC)
 	for len(data) > 0 && (data[0] == '+' || data[0] == '-' || data[0] == ':') {
 		complete, consumed := r.isCompleteRESPMessage(data)
 		if !complete {
 			break
 		}
-		
+
 		message := data[:consumed]
 		fmt.Printf("Received from master: %s", message)
-		
+
 		data = data[consumed:]
 		r.buffer = r.buffer[consumed:]
 	}
-	
+
 	// Handle RDB file if not yet received
 	if !r.rdbReceived && len(data) > 0 {
 		consumed := r.handleRDBFile(data)
@@ -259,7 +259,7 @@ func (r *ReplicaClient) processBufferedCommands() {
 		}
 		// If it doesn't start with $, we might not have the RDB start yet
 	}
-	
+
 	// Process commands after RDB file
 	for len(data) > 0 {
 		// Check if we have a complete RESP message
@@ -268,10 +268,10 @@ func (r *ReplicaClient) processBufferedCommands() {
 			// Not enough data for a complete message, wait for more
 			break
 		}
-		
+
 		// Extract the complete message
 		message := data[:consumed]
-		
+
 		// Check if this looks like a command (starts with *) vs a response (+, -, :, $)
 		if len(message) > 0 && message[0] == '*' {
 			// This is a command array, process it
@@ -285,7 +285,7 @@ func (r *ReplicaClient) processBufferedCommands() {
 			// This is a response (PONG, OK, FULLRESYNC, etc.), just log it
 			fmt.Printf("Received from master: %s", message)
 		}
-		
+
 		// Remove processed data from buffer
 		data = data[consumed:]
 		r.buffer = r.buffer[consumed:]
@@ -305,13 +305,13 @@ func (r *ReplicaClient) handleRDBFile(data string) int {
 	if len(data) == 0 || data[0] != '$' {
 		return 0
 	}
-	
+
 	// Find the end of the length specification
 	firstCRLF := findCRLF(data)
 	if firstCRLF == -1 {
 		return 0 // Not enough data yet
 	}
-	
+
 	// Parse the RDB file length
 	lengthStr := data[1:firstCRLF]
 	length := 0
@@ -323,14 +323,14 @@ func (r *ReplicaClient) handleRDBFile(data string) int {
 			return 0
 		}
 	}
-	
+
 	// Check if we have the complete RDB file
 	headerLen := firstCRLF + 2
 	totalNeeded := headerLen + length
 	if len(data) < totalNeeded {
 		return 0 // Not enough data yet
 	}
-	
+
 	// We have the complete RDB file, consume it
 	return totalNeeded
 }
@@ -340,7 +340,7 @@ func (r *ReplicaClient) isCompleteRESPMessage(data string) (complete bool, consu
 	if len(data) == 0 {
 		return false, 0
 	}
-	
+
 	switch data[0] {
 	case '+', '-', ':': // Simple string, error, integer
 		end := findCRLF(data)
@@ -348,13 +348,13 @@ func (r *ReplicaClient) isCompleteRESPMessage(data string) (complete bool, consu
 			return false, 0
 		}
 		return true, end + 2
-		
+
 	case '$': // Bulk string (but we should have handled RDB already)
 		return r.isCompleteBulkString(data)
-		
+
 	case '*': // Array
 		return r.isCompleteArray(data)
-		
+
 	default:
 		// Unknown type, skip this byte and continue
 		return true, 1
@@ -377,7 +377,7 @@ func (r *ReplicaClient) isCompleteBulkString(data string) (bool, int) {
 	if firstCRLF == -1 {
 		return false, 0
 	}
-	
+
 	// Parse length
 	lengthStr := data[1:firstCRLF]
 	length := 0
@@ -391,13 +391,13 @@ func (r *ReplicaClient) isCompleteBulkString(data string) (bool, int) {
 			return false, 0
 		}
 	}
-	
+
 	// Check if we have enough data for the content + final CRLF
 	needed := firstCRLF + 2 + length + 2
 	if len(data) < needed {
 		return false, 0
 	}
-	
+
 	return true, needed
 }
 
@@ -407,7 +407,7 @@ func (r *ReplicaClient) isCompleteArray(data string) (bool, int) {
 	if firstCRLF == -1 {
 		return false, 0
 	}
-	
+
 	// Parse array count
 	countStr := data[1:firstCRLF]
 	count := 0
@@ -421,16 +421,16 @@ func (r *ReplicaClient) isCompleteArray(data string) (bool, int) {
 			return false, 0
 		}
 	}
-	
+
 	// Process each element in the array
 	consumed := firstCRLF + 2
 	remaining := data[consumed:]
-	
+
 	for i := 0; i < count; i++ {
 		if len(remaining) == 0 {
 			return false, 0
 		}
-		
+
 		// For now, only handle bulk string elements (most common in commands)
 		if remaining[0] == '$' {
 			complete, elementConsumed := r.isCompleteBulkString(remaining)
@@ -444,7 +444,7 @@ func (r *ReplicaClient) isCompleteArray(data string) (bool, int) {
 			return false, 0
 		}
 	}
-	
+
 	return true, consumed
 }
 

@@ -139,7 +139,7 @@ func startReplicationHandshake(masterHost, masterPort, replicaPort string, repo 
 	commandProcessor := func(respData string) error {
 		return replicaHandler.ProcessCommand(respData)
 	}
-	
+
 	// Create a connection setter to pass the connection to the replica handler
 	connectionSetter := func(conn net.Conn) {
 		replicaHandler.SetConnection(conn)

@@ -15,6 +15,7 @@ import (
 type ReplicaCommandHandler struct {
 	dataHandler *DataHandler
 	conn        net.Conn // Connection to master for sending ACK responses
+	offset      int      // Tracks total bytes of commands processed from master
 }
 
 // NewReplicaCommandHandler creates a new replica command handler with repository dependency
@@ -22,6 +23,7 @@ func NewReplicaCommandHandler(repo repository.KeyValueRepository) *ReplicaComman
 	return &ReplicaCommandHandler{
 		dataHandler: NewDataHandler(repo),
 		conn:        nil, // Will be set later via SetConnection
+		offset:      0,   // Start with 0 offset
 	}
 }
 
@@ -116,7 +118,7 @@ func (rch *ReplicaCommandHandler) processReplconf(cmd *Command) error {
 	}
 
 	subcommand := strings.ToUpper(cmd.Args[0])
-	
+
 	switch subcommand {
 	case "GETACK":
 		// REPLCONF GETACK * - master is requesting acknowledgment
@@ -125,7 +127,7 @@ func (rch *ReplicaCommandHandler) processReplconf(cmd *Command) error {
 	default:
 		fmt.Printf("Replica received unknown REPLCONF subcommand: %s\n", subcommand)
 	}
-	
+
 	return nil
 }
 
@@ -137,7 +139,7 @@ func (rch *ReplicaCommandHandler) sendAck() error {
 
 	// For now, hardcode offset to 0 as specified in the requirements
 	offset := "0"
-	
+
 	// Create REPLCONF ACK response: *3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n
 	ackCommand := parser.RESPValue{
 		Type: "array",

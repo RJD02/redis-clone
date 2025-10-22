@@ -42,13 +42,31 @@ func (rch *ReplicaCommandHandler) ProcessCommand(respData string) error {
 
 	fmt.Printf("Replica processing command: %s, Args: %v\n", cmd.Name, cmd.Args)
 
-	// Process commands without sending responses back, except for REPLCONF GETACK
+	// Handle REPLCONF GETACK specially - respond with current offset before updating
+	if cmd.Name == "REPLCONF" && len(cmd.Args) > 0 && strings.ToUpper(cmd.Args[0]) == "GETACK" {
+		// Send ACK with current offset (before processing this command)
+		err := rch.sendAck()
+		if err != nil {
+			return err
+		}
+		// Update offset after sending ACK
+		rch.offset += len(respData)
+		return nil
+	}
+
+	// For all other commands, update offset first, then process
+	rch.offset += len(respData)
+
+	// Process commands without sending responses back
 	switch cmd.Name {
 	case "SET":
-		// Use a nil connection to indicate no response should be sent
 		return rch.processSilentSet(cmd)
+	case "PING":
+		// Process PING silently (just for logging)
+		fmt.Printf("Replica processed PING command\n")
+		return nil
 	case "REPLCONF":
-		// Handle REPLCONF commands (specifically GETACK)
+		// Handle other REPLCONF commands (this shouldn't happen after the check above)
 		return rch.processReplconf(cmd)
 	case "DEL":
 		// Could add delete command handling here
@@ -137,10 +155,10 @@ func (rch *ReplicaCommandHandler) sendAck() error {
 		return fmt.Errorf("no connection to master for sending ACK")
 	}
 
-	// For now, hardcode offset to 0 as specified in the requirements
-	offset := "0"
-
-	// Create REPLCONF ACK response: *3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n
+	// Use current offset
+	offset := strconv.Itoa(rch.offset)
+	
+	// Create REPLCONF ACK response: *3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$<len>\r\n<offset>\r\n
 	ackCommand := parser.RESPValue{
 		Type: "array",
 		Array: []parser.RESPValue{

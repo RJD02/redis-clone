@@ -2,23 +2,32 @@ package handlers
 
 import (
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/codecrafters-io/redis-starter-go/app/parser"
 	"github.com/codecrafters-io/redis-starter-go/app/repository"
 )
 
 // ReplicaCommandHandler handles commands from master without sending responses
 type ReplicaCommandHandler struct {
 	dataHandler *DataHandler
+	conn        net.Conn // Connection to master for sending ACK responses
 }
 
 // NewReplicaCommandHandler creates a new replica command handler with repository dependency
 func NewReplicaCommandHandler(repo repository.KeyValueRepository) *ReplicaCommandHandler {
 	return &ReplicaCommandHandler{
 		dataHandler: NewDataHandler(repo),
+		conn:        nil, // Will be set later via SetConnection
 	}
+}
+
+// SetConnection sets the connection to master (used for sending ACK responses)
+func (rch *ReplicaCommandHandler) SetConnection(conn net.Conn) {
+	rch.conn = conn
 }
 
 // ProcessCommand processes a command from master without sending any response
@@ -31,11 +40,14 @@ func (rch *ReplicaCommandHandler) ProcessCommand(respData string) error {
 
 	fmt.Printf("Replica processing command: %s, Args: %v\n", cmd.Name, cmd.Args)
 
-	// Process commands without sending responses back
+	// Process commands without sending responses back, except for REPLCONF GETACK
 	switch cmd.Name {
 	case "SET":
 		// Use a nil connection to indicate no response should be sent
 		return rch.processSilentSet(cmd)
+	case "REPLCONF":
+		// Handle REPLCONF commands (specifically GETACK)
+		return rch.processReplconf(cmd)
 	case "DEL":
 		// Could add delete command handling here
 		fmt.Printf("Replica processed DEL command (not yet implemented)\n")
@@ -94,5 +106,57 @@ func (rch *ReplicaCommandHandler) processSilentSet(cmd *Command) error {
 	} else {
 		fmt.Printf("Replica SET: %s = %s (no expiration)\n", key, value)
 	}
+	return nil
+}
+
+// processReplconf handles REPLCONF commands from master
+func (rch *ReplicaCommandHandler) processReplconf(cmd *Command) error {
+	if len(cmd.Args) < 1 {
+		return fmt.Errorf("wrong number of arguments for 'replconf' command")
+	}
+
+	subcommand := strings.ToUpper(cmd.Args[0])
+	
+	switch subcommand {
+	case "GETACK":
+		// REPLCONF GETACK * - master is requesting acknowledgment
+		// We should respond with REPLCONF ACK <offset>
+		return rch.sendAck()
+	default:
+		fmt.Printf("Replica received unknown REPLCONF subcommand: %s\n", subcommand)
+	}
+	
+	return nil
+}
+
+// sendAck sends REPLCONF ACK response back to master
+func (rch *ReplicaCommandHandler) sendAck() error {
+	if rch.conn == nil {
+		return fmt.Errorf("no connection to master for sending ACK")
+	}
+
+	// For now, hardcode offset to 0 as specified in the requirements
+	offset := "0"
+	
+	// Create REPLCONF ACK response: *3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n
+	ackCommand := parser.RESPValue{
+		Type: "array",
+		Array: []parser.RESPValue{
+			{Type: "bulk", Str: "REPLCONF"},
+			{Type: "bulk", Str: "ACK"},
+			{Type: "bulk", Str: offset},
+		},
+	}
+
+	// Encode to RESP format
+	respData := parser.EncodeRESP(ackCommand)
+
+	// Send to master
+	_, err := rch.conn.Write([]byte(respData))
+	if err != nil {
+		return fmt.Errorf("failed to write REPLCONF ACK response: %v", err)
+	}
+
+	fmt.Printf("Sent REPLCONF ACK %s to master: %s", offset, respData)
 	return nil
 }

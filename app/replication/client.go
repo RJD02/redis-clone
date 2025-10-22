@@ -11,6 +11,9 @@ import (
 // CommandProcessor defines a function type for processing commands from master
 type CommandProcessor func(respData string) error
 
+// ConnectionSetter defines a function for setting the connection on command processor
+type ConnectionSetter func(conn net.Conn)
+
 // ReplicaClient handles the connection from replica to master
 type ReplicaClient struct {
 	masterHost       string
@@ -18,17 +21,19 @@ type ReplicaClient struct {
 	replicaPort      string
 	conn             net.Conn
 	commandProcessor CommandProcessor
-	buffer           []byte // Buffer for accumulating partial data
-	rdbReceived      bool   // Flag to track if RDB file has been fully received
+	connectionSetter ConnectionSetter // New field to set connection on command processor
+	buffer           []byte            // Buffer for accumulating partial data
+	rdbReceived      bool              // Flag to track if RDB file has been fully received
 }
 
 // NewReplicaClient creates a new replica client
-func NewReplicaClient(masterHost, masterPort, replicaPort string, processor CommandProcessor) *ReplicaClient {
+func NewReplicaClient(masterHost, masterPort, replicaPort string, processor CommandProcessor, setter ConnectionSetter) *ReplicaClient {
 	return &ReplicaClient{
 		masterHost:       masterHost,
 		masterPort:       masterPort,
 		replicaPort:      replicaPort,
 		commandProcessor: processor,
+		connectionSetter: setter,
 		buffer:           make([]byte, 0, 4096),
 	}
 }
@@ -45,6 +50,12 @@ func (r *ReplicaClient) Connect() error {
 	}
 
 	fmt.Printf("Connected to master at %s\n", address)
+	
+	// Set the connection on the command processor so it can send ACK responses
+	if r.connectionSetter != nil {
+		r.connectionSetter(r.conn)
+	}
+	
 	return nil
 }
 

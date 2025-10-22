@@ -35,7 +35,11 @@ func NewConnectionHandler(handlerManager *handlers.HandlerManager) *ConnectionHa
 
 // HandleConnection handles a single client connection
 func (ch *ConnectionHandler) HandleConnection(conn net.Conn) {
-	defer conn.Close()
+	defer func() {
+		// Clean up replica connection if it was registered
+		replication.Manager.RemoveReplica(conn)
+		conn.Close()
+	}()
 
 	fmt.Printf("New connection from %s\n", conn.RemoteAddr())
 

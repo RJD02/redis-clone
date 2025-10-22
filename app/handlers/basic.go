@@ -7,6 +7,7 @@ import (
 
 	"github.com/codecrafters-io/redis-starter-go/app/config"
 	"github.com/codecrafters-io/redis-starter-go/app/parser"
+	"github.com/codecrafters-io/redis-starter-go/app/replication"
 )
 
 // HandlePing handles the PING command
@@ -69,7 +70,7 @@ func HandlePsync(conn net.Conn, cmd *Command) {
 	// Send empty RDB file after FULLRESYNC response
 	// This is the hex representation of an empty RDB file
 	emptyRDBHex := "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"
-	
+
 	// Decode hex to binary
 	rdbData, err := hex.DecodeString(emptyRDBHex)
 	if err != nil {
@@ -94,4 +95,7 @@ func HandlePsync(conn net.Conn, cmd *Command) {
 	}
 
 	fmt.Printf("Sent empty RDB file (%d bytes)\n", len(rdbData))
+
+	// Register this connection as a replica for command propagation
+	replication.Manager.AddReplica(conn)
 }

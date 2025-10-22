@@ -2,6 +2,7 @@
 redis-server
 test-binary
 server
+main
 *.exe
 *.out
 

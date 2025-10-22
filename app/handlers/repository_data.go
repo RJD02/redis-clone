@@ -7,7 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codecrafters-io/redis-starter-go/app/config"
 	"github.com/codecrafters-io/redis-starter-go/app/parser"
+	"github.com/codecrafters-io/redis-starter-go/app/replication"
 	"github.com/codecrafters-io/redis-starter-go/app/repository"
 )
 
@@ -83,6 +85,11 @@ func (h *DataHandler) HandleSet(conn net.Conn, cmd *Command) {
 	if err != nil {
 		fmt.Println("Failed to write SET response")
 		return
+	}
+
+	// Propagate command to replicas if this is a master server
+	if config.IsServerMaster() {
+		replication.Manager.PropagateCommand("SET", cmd.Args)
 	}
 
 	if expiration != nil {
